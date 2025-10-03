@@ -1,0 +1,9 @@
+# 仮想環境フォルダ
+venv/
+
+# Pythonが自動生成するキャッシュファイル
+__pycache__/
+*.pyc
+
+#APIキー
+.streamlit/secrets.toml
