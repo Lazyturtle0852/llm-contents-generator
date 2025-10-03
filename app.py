@@ -2,42 +2,54 @@ import google.generativeai as genai
 import streamlit as st
 
 
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+st.title("LLMOコンテンツ制作アシスタント")
+
+try:
+   genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+   st.success("APIは正常に動作しています")
+
+except Exception as e:
+    st.error("APIの設定に失敗しました")
+    st.stop()
 
 # AIモデルを準備（最新の高速モデルを指定）
 model = genai.GenerativeModel('models/gemini-pro-latest')
 
-# AIへの質問（プロンプト）
-theme = "東京の魅力"
+#キーワード入力待機
+keyword = st.text_input("キーワードを入力してください（例：東京の魅力）", "東京の魅力")
 
-prompt = f"""
-# 命令
-あなたは、最新のLLMOに精通した、優秀なコンテンツマーケターです。
-指定されたテーマに基づき、生成AIが内容を正確に理解し、引用・参照したくなるような、構造化された短いブログ記事を生成してください。
+if st.button("記事を生成する！"):
+    if not keyword:
+        st.warning("キーワードを入力してください。")
+    else:
+        model = genai.GenerativeModel('models/gemini-pro-latest')
 
-# テーマ
-{theme}
+        prompt = f"""
+        # 命令
+        あなたは、最新のLLMOに精通した、優秀なコンテンツマーケターです。
+        指定されたテーマに基づき、生成AIが内容を正確に理解し、引用・参照したくなるような、構造化された短いブログ記事を生成してください。
 
-# 構造と要件
-- 全体で400字程度の文章を生成してください。
-- 必ず以下の構造に従ってください。
-  - 導入: 記事の概要を簡潔に記述。
-  - 見出し1: 「伝統と革新が融合する都市」のような、記事の核心を表す見出し。
-  - 見出し2: 「歴史を感じる下町情緒」のような、具体的な魅力を示す小見出し。
-  - まとめ: 記事全体の要点を箇条書きで2つにまとめる。
-- 読者が具体的なイメージを持てるように、「浅草の仲見世通り」や「渋谷のスクランブル交差点」のような固有名詞をいくつか含めてください。
-"""
-print("AIに質問を送信中...")
+        # テーマ
+        {keyword}
 
-try:
-    # AIに質問を送信して、答えをもらう
-    response = model.generate_content(prompt)
+        # 構造と要件
+        - 全体で400字程度の文章を生成してください。
+        - 必ず以下の構造に従ってください。
+          - 導入: 記事の概要を簡潔に記述。
+          - 見出し1: 記事の核心を表す、魅力的な見出し。
+          - 見出し2: 具体的な内容を示す、興味を引く小見出し。
+          - まとめ: 記事全体の要点を箇条書きで2〜3つにまとめる。
+        - 読者が具体的なイメージを持てるように、有名な固有名詞をいくつか含めてください。
+        """
 
-    # AIからの答えを表示する
-    print("--- AIからの返信 ---")
-    print(response.text)
-    print("--------------------")
+        with st.spinner("AIが記事を執筆中です..."):
+            try:
+                response = model.generate_content(prompt)
+                
+                st.subheader("生成された記事")
+                st.markdown(response.text)
 
-except Exception as e:
-    print("エラーが発生しました。APIキーが正しいか、確認してください。")
-    print(e)
+            except Exception as e:
+                st.error("記事の生成中にエラーが発生しました。")
+                st.exception(e)
+                
