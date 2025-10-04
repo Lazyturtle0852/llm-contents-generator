@@ -93,6 +93,9 @@ if st.button("1. タイトル案を10個生成する"):
 if 'title_list' in st.session_state and st.session_state['title_list']:
     st.subheader("ステップ2：タイトル選択と記事生成")
     selected_title = st.radio("生成されたタイトル案:", st.session_state['title_list'])
+
+    #文字数設定
+    wordcount=st.slider("文字数を設定してください", min_value=50, max_value=5000, value=400, step=10)
     
     if st.button("2. 選択したタイトルで記事を生成する"):
         model = genai.GenerativeModel('models/gemini-pro-latest')
@@ -113,9 +116,9 @@ if 'title_list' in st.session_state and st.session_state['title_list']:
         ---
         {summary}
         """
-        prompt_for_article += """
+        prompt_for_article += f"""
         # 構造と要件
-        - 全体で400字から600字程度の文章を生成してください。
+        - 全体で{wordcount}字程度の文章を生成してください。
         - 「承知しました」などの、本来の文章に関係ない内容は一切含めないでください。
         - 必ず以下の構造に従ってください。
           - 導入: 記事の概要と読者が得られるメリットを簡潔に記述。
