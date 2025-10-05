@@ -1,8 +1,8 @@
 import streamlit as st
 import google.generativeai as genai
 
+
 # --- ページ設定とAPIキー設定 ---
-# (ここは変更なし)
 st.set_page_config(page_title="LLMコンテンツ生成アシスタント", layout="wide")
 st.title("📝 LLMコンテンツ生成アシスタント")
 
@@ -46,6 +46,8 @@ with col2:
             st.rerun()  # ページを即座に再実行
 
 summary = st.text_area("書きたい記事の概要（任意）:", placeholder="（省略可）...")
+style = st.text_area("文章のスタイル（任意）:", placeholder="（省略可）...")
+
 
 # 入力されたキーワードをカンマ区切りの一つの文字列に変換
 keywords_str = ", ".join(keywords_list)
@@ -79,6 +81,7 @@ if st.button("1. タイトル案を10個生成する"):
         ---
         {summary}
         """
+
         prompt_for_titles += """
         # 要件
         - 上記のターゲット読者が「これは自分のための記事だ！」と直感的に感じるような、具体的で課題解決志向のタイトル案を10個生成してください。
@@ -118,16 +121,25 @@ if "title_list" in st.session_state and st.session_state["title_list"]:
         あなたは、中堅企業向けにノーコード業務自動化ツールを提供する急成長SaaS企業「CloudFlow Dynamics」の、非常に優秀なコンテンツマーケターです。
 
         # 記事の最終ゴール
-        読者が記事を読み終えた時、自分たちの会社にはびこる非効率な手作業や業務プロセスへの課題意識が最大化され、具体的な解決策として当社の製品「FlowSpark」に強い興味を持ち、資料請求や無料トライアルを検討したくなる状態を作り出すことです。
+        読者が記事を読み終えた時、自分たちの会社にはびこる非効率な手作業や業務プロセスへの課題意識が最大化され、具体的な解決策として当社の製品に強い興味を持ち、資料請求や無料トライアルを検討したくなる状態を作り出すことです。
 
         # ターゲット読者
         中堅企業の経理、人事、営業部門のマネージャー層。プログラミングの知識はないが、日々の手作業（Excel、メールのコピペなど）や部署間の非効率な連携に課題を感じています。
 
         # トーン＆マナー
         専門性を感じさせつつも、難解な言葉は避け、読者に深く共感し、共に課題を解決していくパートナーのような、信頼感と説得力のあるトーンで記述してください。
+        
 
         # タイトル
         {selected_title}
+        """
+
+        if style:
+            prompt_for_article += f"""
+        # 指定文章スタイル
+        文章のスタイルは以下の通りにしてください。
+        ---
+        {style}
         """
 
         if summary:
@@ -153,9 +165,20 @@ if "title_list" in st.session_state and st.session_state["title_list"]:
         with st.spinner("AIが記事を執筆中です..."):
             try:
                 response = model.generate_content(prompt_for_article)
-                st.subheader("生成された記事 📝")
-                st.markdown(response.text)
-                st.success("記事の生成が完了しました。")
+                st.session_state["generated_article"] = response.text
             except Exception as e:
                 st.error("記事の生成中にエラーが発生しました。")
                 st.exception(e)
+
+if "generated_article" in st.session_state:
+    st.subheader("ステップ3：記事のプレビューとコピー")
+
+    # Markdownとしてレンダリング表示
+    st.markdown("### 📝 プレビュー（Markdown）")
+    st.markdown(st.session_state["generated_article"])
+
+    st.markdown("---")
+
+    # コピー用コードブロック
+    st.write("📋 下の枠からワンクリックでコピーできます：")
+    st.code(st.session_state["generated_article"], language=None)
