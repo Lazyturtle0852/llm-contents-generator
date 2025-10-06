@@ -8,18 +8,26 @@ st.title("📝 LLMコンテンツ生成アシスタント")
 
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
+
 except Exception as e:
     st.error(
         "APIキーの設定に失敗しました。`.streamlit/secrets.toml`ファイルを確認してください。"
     )
     st.stop()
 
+
 # --- UI（ユーザーインターフェース）の構築 ---
 st.subheader("ステップ1：キーワードと概要の入力")
 
-# session_stateにキーワードの数がなければ、初期値として1を設定
+
+# --- session_stateの初期化 ---
 if "keyword_count" not in st.session_state:
-    st.session_state["keyword_count"] = 1
+    st.session_state.keyword_count = 1
+if "title_list" not in st.session_state:
+    st.session_state.title_list = []
+if "article_text" not in st.session_state:
+    st.session_state.article_text = ""
 
 # キーワード入力欄を、現在の数だけ動的に生成
 keywords_list = []
@@ -57,8 +65,6 @@ if st.button("1. タイトル案を10個生成する"):
     if not keywords_str:
         st.warning("キーワードを入力してください。")
     else:
-        model = genai.GenerativeModel("models/gemini-pro-latest")
-
         # --- 動的なプロンプト組み立て ---
         prompt_for_titles = f"""
         # 命令
@@ -113,8 +119,6 @@ if "title_list" in st.session_state and st.session_state["title_list"]:
         "文字数を設定してください", min_value=50, max_value=5000, value=400, step=10
     )
     if st.button("2. 選択したタイトルで記事を生成する"):
-        model = genai.GenerativeModel("models/gemini-pro-latest")
-
         # --- 動的なプロンプト組み立て ---
         prompt_for_article = f"""
         # あなた（AI）の役割
@@ -165,20 +169,80 @@ if "title_list" in st.session_state and st.session_state["title_list"]:
         with st.spinner("AIが記事を執筆中です..."):
             try:
                 response = model.generate_content(prompt_for_article)
-                st.session_state["generated_article"] = response.text
+                st.session_state["article_text"] = response.text
+                st.rerun()
             except Exception as e:
                 st.error("記事の生成中にエラーが発生しました。")
                 st.exception(e)
 
-if "generated_article" in st.session_state:
-    st.subheader("ステップ3：記事のプレビューとコピー")
+if "article_text" in st.session_state:
+    st.subheader("ステップ3：記事の編集・調整・コピー")
 
-    # Markdownとしてレンダリング表示
-    st.markdown("### 📝 プレビュー（Markdown）")
-    st.markdown(st.session_state["generated_article"])
+    # 画面を左右2つのカラムに分割
+    col1, col2 = st.columns(2)
 
-    st.markdown("---")
+    with col1:
+        st.write("**編集エリア（Markdown記法）**")
+        edited_text = st.text_area(
+            "ここで自由に編集できます:",
+            value=st.session_state["article_text"],
+            height=600,
+            label_visibility="collapsed",
+        )
 
-    # コピー用コードブロック
-    st.write("📋 下の枠からワンクリックでコピーできます：")
-    st.code(st.session_state["generated_article"], language=None)
+    with col2:
+        st.write("**リアルタイムプレビュー**")
+        # 編集エリアのテキスト(edited_text)を、リアルタイムでMarkdownとして表示
+        st.markdown(edited_text)
+
+    st.write("---")
+
+    # --- AIによる自動調整機能 ---
+    st.subheader("AIによる自動調整")
+    rewrite_instruction = st.text_input(
+        "調整の指示を入力してください（例：もっとフレンドリーな口調にして、絵文字も使って）"
+    )
+
+    if st.button("AIで調整する"):
+        if not rewrite_instruction:
+            st.warning("調整の指示を入力してください。")
+        else:
+            with st.spinner("AIが記事を調整中です..."):
+                rewrite_prompt = f"""
+                # 命令
+                あなたは、非常に優秀なプロの編集者です。
+                以下の「元の文章」を、「編集指示」に従って、より質の高い文章に修正・再構成してください。
+                元の文章の良い点は活かしつつ、指示に忠実に従ってください。
+                なお、余計な文章は一切含めないこと。
+
+                # 元の文章
+                ---
+                {edited_text} 
+                ---
+
+                # 編集指示
+                ---
+                {rewrite_instruction}
+                ---
+
+                # 修正後の文章
+                """
+
+                try:
+                    response = model.generate_content(rewrite_prompt)
+                    st.session_state["article_text"] = response.text
+                    st.session_state["text_for_editing"] = response.text
+                    st.rerun()
+                except Exception as e:
+                    st.error("記事の調整中にエラーが発生しました。")
+                    st.exception(e)
+
+    # コピー用コードブロック(冗長なのでコメントアウト中)
+    # st.write("📋 下の枠からワンクリックでコピーできます：")
+    # st.code(st.session_state["article_text"], language=None)
+
+
+st.divider()
+st.header("デバッグ情報")
+st.write("現在の`st.session_state`の中身:")
+st.json(st.session_state)
