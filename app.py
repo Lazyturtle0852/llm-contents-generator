@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 
 
 # --- ページ設定とAPIキー設定 ---
@@ -173,6 +174,97 @@ if "title_list" in st.session_state and st.session_state["title_list"]:
                 st.rerun()
             except Exception as e:
                 st.error("記事の生成中にエラーが発生しました。")
+                st.exception(e)
+
+    data_context = ""
+    if st.button("信頼性のある情報を手動で設定する"):
+        data_context = st.text_area("信頼性のある情報をここに追加")
+
+    if st.button("信頼性のある情報を組み込む"):
+        # prompt_for_credibility = f"""
+        # # あなた（AI）の役割
+        # あなたは、中堅企業向けにノーコード業務自動化ツールを提供する急成長SaaS企業「CloudFlow Dynamics」の、非常に優秀なコンテンツマーケターです。
+
+        # # 記事の最終ゴール
+        # 読者が記事を読み終えた時、自分たちの会社にはびこる非効率な手作業や業務プロセスへの課題意識が最大化され、具体的な解決策として当社の製品に強い興味を持ち、資料請求や無料トライアルを検討したくなる状態を作り出すことです。
+
+        # # 指示
+        # 記事の説得力を高めるために必要な統計データや事例を特定し、
+        # それぞれに検索クエリを付けてください。
+
+        # # 出力形式
+        # 以下のJSON形式で出力してください。一例であるので、内容はあなたが考えてください。：
+        # {{
+        #   "data_needs": [
+        #     {{
+        #       "placeholder": "DATA_1",
+        #       "description": "ノーコードツール市場の成長率",
+        #       "search_query": "ノーコードツール 市場規模 成長率 2024",
+        #       "data_type": "統計"
+        #     }},
+        #     {{
+        #       "placeholder": "DATA_2",
+        #       "description": "業務自動化の導入効果",
+        #       "search_query": "業務自動化 導入効果 ROI 調査",
+        #       "data_type": "統計"
+        #     }}
+        #   ]
+        # }}
+
+        # # 元の記事（プレースホルダー付き）
+        # {st.session_state["article_text"]}
+        # """
+
+        # if data_context:
+        #     prompt_for_credibility += f"""
+
+        # # 使用可能な検証済みデータ
+        #  {data_context}
+        # ---
+
+        # """
+        # with st.spinner("AIが信頼性のある情報を追加しています"):
+        #     try:
+        #         response = model.generate_content(prompt_for_credibility)
+        #         st.session_state["data_needs"] = response.text
+        #         st.rerun()
+        #         st.json(st.session_state["data_needs"])
+
+        #     except Exception as e:
+        #         st.error("記事の生成中にエラーが発生しました。")
+        #         st.exception(e)
+
+        # ツールを使える、より新しいモデルを選択する場合があります
+        # 今回はgemini-pro-latestが対応していることを期待します
+
+        model = genai.GenerativeModel(
+            model_name="models/gemini-2.5-pro",
+        )
+
+        with st.spinner("AIがWeb検索を行い、記事の説得力を強化しています..."):
+            # ★★ 修正ポイント2：プロンプトを、よりツール利用を促す形に ★★
+            rewrite_prompt = f"""
+                # 命令
+                あなたは、非常に優秀なプロの編集者兼リサーチャーです。
+                以下の「元の文章」の主張の信頼性を高めるために、Webで最新の情報を検索し、発見した客観的な統計データや事例を引用してください。
+
+                # 引用時の厳格なルール
+                - 引用する際は、**検索で発見した情報源の名称と、その情報が記載されている実在するURLの両方**を記載してください。
+                - URLを創作（ハルシネーション）してはいけません。
+                - 出典の形式は、必ず **`[出典: 情報源の名称](実在するURL)`** というMarkdownリンク形式で記載してください。
+                - ★★もし適切なURLが発見できなかった場合は、URLは記載せず `[出典: 情報源の名称]` のみ記載してください。★★
+
+                # 元の文章
+                ---
+                {st.session_state["article_text"]} """
+
+            try:
+                response = model.generate_content(rewrite_prompt)
+                st.session_state.article_text = response.text
+                st.rerun()
+
+            except Exception as e:
+                st.error("記事の調整中にエラーが発生しました。")
                 st.exception(e)
 
 if "article_text" in st.session_state:
