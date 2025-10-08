@@ -1,18 +1,7 @@
-from google import genai
-from google.genai import types
 import streamlit as st
 import google.generativeai as genai
-from google.genai import types
-
-from google.genai.types import (
-    FunctionDeclaration,
-    GenerateContentConfig,
-    GoogleSearch,
-    SafetySetting,
-    ThinkingConfig,
-    Tool,
-    ToolCodeExecution,
-)
+import requests
+import json
 
 
 # --- ページ設定とAPIキー設定 ---
@@ -20,9 +9,7 @@ st.set_page_config(page_title="LLMコンテンツ生成アシスタント", layo
 st.title("📝 LLMコンテンツ生成アシスタント")
 
 try:
-    # genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-
+    client = genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
 
 except Exception as e:
@@ -30,6 +17,9 @@ except Exception as e:
         "APIキーの設定に失敗しました。`.streamlit/secrets.toml`ファイルを確認してください。"
     )
     st.stop()
+
+
+tab1, tab2, tab3 = st.tabs(["① 下書き生成", "③ デバッグ & ファクトチェック"])
 
 # --- UI（ユーザーインターフェース）の構築 ---
 st.subheader("ステップ1：キーワードと概要の入力")
@@ -193,40 +183,176 @@ if "title_list" in st.session_state and st.session_state["title_list"]:
     if st.button("信頼性のある情報を手動で設定する"):
         data_context = st.text_area("信頼性のある情報をここに追加")
 
-    if st.button("信頼性のある情報を組み込む"):
-        # ツール利用に適した高性能モデルを選択
-        model_with_tool = genai.GenerativeModel(
-            model_name="models/gemini-2.5-pro",
+
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+
+except FileNotFoundError:
+    # ローカル環境などで .streamlit/secrets.toml がない場合のエラーハンドリング
+    st.error("APIキーが見つかりません。.streamlit/secrets.toml を設定してください。")
+    st.stop()
+
+
+# --- Streamlit UI ---
+grounding_prompt = f"""
+# 命令
+あなたは、非常に優秀なプロの編集者兼リサーチャーです。
+以下の「元の文章」の主張の信頼性を高めるため、**Google検索ツールを自律的に使用し、発見した客観的な統計データや事例を引用**してください。
+引用した場合は、必ず、検索で発見した実在する情報源を明記または示唆してください。例えば、「example.comによると、...」のような形で記述してください。 
+URLを創作してはいけません。
+
+# 元の文章
+---
+{st.session_state["article_text"]}
+"""
+
+if st.button("信頼性のある情報を組み込む"):
+    with st.spinner("Google検索を参照して回答を生成中..."):
+        # モデルのエンドポイントURL
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={api_key}"
+
+        # APIに送信するデータ（ペイロード）
+        payload = {
+            "contents": [{"parts": [{"text": grounding_prompt}]}],
+            "tools": [{"googleSearch": {}}],
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, headers=headers, data=json.dumps(payload))
+
+            response.raise_for_status()  # HTTPエラーがあれば例外を発生させる
+
+            response_json = response.json()
+
+            generated_text = response_json["candidates"][0]["content"]["parts"][0][
+                "text"
+            ]
+
+            st.markdown(generated_text)
+
+        except requests.exceptions.HTTPError as http_err:
+            st.error(f"HTTPエラーが発生しました: {http_err}")
+
+            st.error(f"レスポンス内容: {response.text}")
+
+        except Exception as e:
+            st.error(f"予期せぬエラーが発生しました: {e}")
+
+        # --- デバッグ情報 ---
+        st.header("デバッグ情報")
+        with st.expander("APIレスンスのJSON全体を表示"):
+            st.json(response_json)
+
+        # --- グラウンディング詳細 ---
+        grounding_meta = response_json.get("candidates", [{}])[0].get(
+            "groundingMetadata", {}
         )
 
-        with st.spinner("AIがWeb検索を行い、記事の説得力を強化しています..."):
-            rewrite_prompt = f"""
-                # 命令
-                あなたは、非常に優秀なプロの編集者兼リサーチャーです。
-                以下の「元の文章」の主張の信頼性を高めるため、**Google検索ツールを自律的に使用し、発見した客観的な統計データや事例を引用**してください。
-                引用した場合は、必ず文末などに**[出典: 〇〇](URL)**の形で、**検索で発見した実在する情報源**を明記してください。
-                URLを創作してはいけません。
+        if grounding_meta:  # groundingMetadataが存在する場合のみ表示
+            with st.expander("グラウンディング詳細（検索クエリと参照ソース）"):
+                # 検索クエリの表示
+                st.subheader("🤖 AIが実行した検索クエリ")
+                search_queries = grounding_meta.get("webSearchQueries", [])
+                if search_queries:
+                    for query in search_queries:
+                        st.info(query)
+                else:
+                    st.write("検索クエリはありませんでした。")
 
-                # 元の文章
-                ---
-                {st.session_state["article_text"]}
-                """
+                st.markdown("---")
 
-            # generate_contentの呼び出し
-            try:
-                grounding_tool = types.Tool(google_search=types.GoogleSearch())
+                # 使用したソースの一覧表示
+                st.subheader("📚 参照したWebソース一覧")
+                grounding_chunks = grounding_meta.get("groundingChunks", [])
+                if grounding_chunks:
+                    for i, chunk in enumerate(grounding_chunks):
+                        title = chunk.get("web", {}).get("title", "タイトル不明")
+                        uri = chunk.get("web", {}).get("uri", "#")
+                        # Markdownを使い、タイトルをクリック可能なリンクにする
+                        st.markdown(f"{i + 1}. **{title}** - [リンク]({uri})")
+                else:
+                    st.write("参照ソースはありませんでした。")
 
-                config = types.GenerateContentConfig(tools=[grounding_tool])
+        # --- ファクトチェック表示 ---
+        st.header("ファクトチェック表示")
+        st.caption("AIが生成した各文章とその根拠となったソース")
 
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents="Who won the euro 2024?",
-                    config=config,
-                )
+        grounding_supports = grounding_meta.get("groundingSupports", [])
+        grounding_chunks = grounding_meta.get("groundingChunks", [])
 
-            except Exception as e:
-                st.error("記事の調整中にエラーが発生しました。")
-                st.exception(e)
+        if not grounding_supports:
+            st.warning(
+                "根拠情報(groundingSupports)がレスポンスに含まれていませんでした。"
+            )
+        else:
+            # 取得した情報をループで表示
+            for gs in grounding_supports:
+                # st.container(border=True) で各情報をカード化する
+                with st.container(border=True):
+                    # 1. AIが生成した文章部分
+                    text_segment = gs.get("segment", {}).get(
+                        "text", "テキストが取得できませんでした。"
+                    )
+                    st.markdown(text_segment.strip())
+
+                    st.markdown("---")  # 水平線で区切る
+
+                    # 2. その文章の裏付けとなったソース
+                    st.caption("ソース")
+
+                    indices = gs.get("groundingChunkIndices", [])
+                    if not indices:
+                        st.write("この文章に対応するソースはありませんでした。")
+                    else:
+                        for gci in indices:
+                            # grounding_chunksリストから該当するソース情報を取得
+                            st.info(
+                                f"アクセスしようとしているインデックス `gci`: `{gci}`"
+                            )
+                            source_chunk = grounding_chunks[gci]
+                            title = source_chunk.get("web", {}).get(
+                                "title", "タイトル不明"
+                            )
+                            uri = source_chunk.get("web", {}).get("uri", "#")
+                            # アイコンを付けて分かりやすく表示
+                            st.markdown(f"🔗 **{title}** - [ソースへ]({uri})")
+
+    # if st.button("信頼性のある情報を組み込む"):
+    #     # ツール利用に適した高性能モデルを選択
+    #     model_with_tool = genai.GenerativeModel(
+    #         model_name="models/gemini-2.5-pro",
+    #     )
+
+    #     with st.spinner("AIがWeb検索を行い、記事の説得力を強化しています..."):
+    #         rewrite_prompt = f"""
+    #             # 命令
+    #             あなたは、非常に優秀なプロの編集者兼リサーチャーです。
+    #             以下の「元の文章」の主張の信頼性を高めるため、**Google検索ツールを自律的に使用し、発見した客観的な統計データや事例を引用**してください。
+    #             引用した場合は、必ず文末などに**[出典: 〇〇](URL)**の形で、**検索で発見した実在する情報源**を明記してください。
+    #             URLを創作してはいけません。
+
+    #             # 元の文章
+    #             ---
+    #             {st.session_state["article_text"]}
+    #             """
+
+    #         # generate_contentの呼び出し
+    #         try:
+    #             grounding_tool = types.Tool(google_search=types.GoogleSearch())
+
+    #             config = types.GenerateContentConfig(tools=[grounding_tool])
+
+    #             response = client.models.generate_content(
+    #                 model="gemini-2.5-flash",
+    #                 contents="Who won the euro 2024?",
+    #                 config=config,
+    #             )
+
+    #         except Exception as e:
+    #             st.error("記事の調整中にエラーが発生しました。")
+    #             st.exception(e)
 
 if "article_text" in st.session_state:
     st.subheader("ステップ3：記事の編集・調整・コピー")

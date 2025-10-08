@@ -21,6 +21,7 @@ except FileNotFoundError:
 prompt = st.text_input(
     "質問を入力してください:", "2025年の自民党総裁選挙で勝利したのは誰ですか？"
 )
+prompt += "Web検索の結果から引用し、箇条書きで回答してください。それぞれの事実について、根拠となった情報源を特定できるようにしてください。"
 
 
 if st.button("生成する"):
@@ -30,11 +31,9 @@ if st.button("生成する"):
     else:
         with st.spinner("Google検索を参照して回答を生成中..."):
             # モデルのエンドポイントURL
-
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={api_key}"
 
             # APIに送信するデータ（ペイロード）
-
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "tools": [{"googleSearch": {}}],
