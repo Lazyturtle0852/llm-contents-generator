@@ -11,7 +11,7 @@ def show():
         )
         st.stop()
     try:
-        client = genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
 
     except Exception as e:
@@ -36,6 +36,7 @@ def show():
     以下の「元の文章」の主張の信頼性を高めるため、**Google検索ツールを自律的に使用し、発見した客観的な統計データや事例を引用**してください。
     引用した場合は、必ず、検索で発見した実在する情報源を明記または示唆してください。例えば、「example.comによると、...」のような形で記述してください。 
     URLを創作してはいけません。
+    なお、余計な文章（「承知しました」など）は一切含めないこと。
 
     # 元の文章
     ---
@@ -67,6 +68,7 @@ def show():
                 ]
 
                 st.markdown(generated_text)
+                st.session_state["article_text"] = generated_text
 
             except requests.exceptions.HTTPError as http_err:
                 st.error(f"HTTPエラーが発生しました: {http_err}")
@@ -143,11 +145,13 @@ def show():
                             st.write("この文章に対応するソースはありませんでした。")
                         else:
                             for gci in indices:
+                                if gci < len(grounding_chunks):
+                                    source_chunk = grounding_chunks[gci]
+                                    # ...
+                                else:
+                                    st.warning(f"インデックス {gci} は範囲外です")
                                 # grounding_chunksリストから該当するソース情報を取得
-                                st.info(
-                                    f"アクセスしようとしているインデックス `gci`: `{gci}`"
-                                )
-                                source_chunk = grounding_chunks[gci]
+                                # st.info(f"アクセスしようとしているインデックス `gci`: `{gci}`")
                                 title = source_chunk.get("web", {}).get(
                                     "title", "タイトル不明"
                                 )
@@ -202,6 +206,8 @@ def show():
                 height=600,
                 label_visibility="collapsed",
             )
+            if edited_text != st.session_state["article_text"]:
+                st.session_state["article_text"] = edited_text
 
         with col2:
             st.write("**リアルタイムプレビュー**")

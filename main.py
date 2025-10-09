@@ -4,8 +4,8 @@ import streamlit as st
 import edit
 import generation
 
-st.title("📝 LLMコンテンツ生成アシスタント")
-st.set_page_config(page_title="LLMコンテンツ生成アシスタント", layout="wide")
+st.set_page_config(page_title="LLMOコンテンツ生成アシスタント", layout="wide")
+st.title("LLMOコンテンツ生成アシスタント")
 
 # タブを作成
 tab1, tab2 = st.tabs(["記事生成", "編集・調整"])

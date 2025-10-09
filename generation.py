@@ -5,7 +5,7 @@ import google.generativeai as genai
 def show():
     # --- ページ設定とAPIキー設定 ---
     try:
-        client = genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
 
     except Exception as e:
@@ -129,6 +129,15 @@ def show():
             # トーン＆マナー
             専門性を感じさせつつも、難解な言葉は避け、読者に深く共感し、共に課題を解決していくパートナーのような、信頼感と説得力のあるトーンで記述してください。
             
+           
+            # LLMO最適化要件（重要）
+            以下の要素を必ず含めてください：
+            1. 冒頭で「〇〇とは」形式の明確な定義文
+            2. 各セクションの冒頭に要約文（1行）を配置
+            3. 具体的な手順を3〜5ステップで記載
+            4. 比較表（導入前/導入後、手動/自動化など）
+            なお、ハルシネーションを避けるため、事実に基づかない情報は一切含めないこと。
+            
             # タイトル
             {selected_title}
             
@@ -136,7 +145,7 @@ def show():
             {keywords_str}
             """
             if summary:
-                prompt_for_titles += f"""
+                prompt_for_article += f"""
             # 参考概要
             以下の概要も考慮してください。
             ---
