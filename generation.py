@@ -75,7 +75,7 @@ def show():
             if summary:
                 prompt_for_titles += f"""
             # 参考概要
-            以下の概要も考慮してください。
+            以下の概要・ストーリーには必ず従うこと。
             ---
             {summary}
             """
@@ -147,7 +147,7 @@ def show():
             if summary:
                 prompt_for_article += f"""
             # 参考概要
-            以下の概要も考慮してください。
+            以下の概要・ストーリーには必ず従うこと。
             ---
             {summary}
 
@@ -165,7 +165,7 @@ def show():
             if summary:
                 prompt_for_article += f"""
             # 参考概要
-            以下の概要も、記事の内容を膨らませる上で強く参考にしてください。
+            以下の概要も、記事の内容を膨らませる上で強く参考にし、必ず従うこと。
             ---
             {summary}
             """
