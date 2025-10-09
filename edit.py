@@ -184,10 +184,12 @@ def show():
         #         except Exception as e:
         #             st.error("記事の調整中にエラーが発生しました。")
         #             st.exception(e)
-
+    if not st.session_state.article_text:
+        st.info(
+            "まだ記事が生成されていません。まずは「記事生成」タブで記事を生成してください。"
+        )
+        st.stop()
     if "article_text" in st.session_state:
-        st.subheader("ステップ3：記事の編集・調整・コピー")
-
         # 画面を左右2つのカラムに分割
         col1, col2 = st.columns(2)
 
